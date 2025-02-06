@@ -19,4 +19,21 @@ model User {
     lastName      String?
     emailAddress  String    @unique
     credits       Int       @default(150)
+    gitProjects GitProject[]
+}
+
+model GitProject {
+    id String @id @default(uuid())
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    projectName String
+    repoUrl String
+
+    githubToken String?
+
+    deletedAt DateTime?
+
+    userId String
+    user User @relation(fields: [userId], references: [id])
 }
