@@ -4,6 +4,9 @@ import { Input } from "@/components/ui/input"
 import Image from "next/image"
 import { motion } from "framer-motion"
 import {useForm} from "react-hook-form"
+import { api } from "@/trpc/react"
+import { toast } from "sonner"
+import UseRefetch from "@/hooks/use-refetch"
 
 type FormInput = {
     repoUrl : string
@@ -12,10 +15,26 @@ type FormInput = {
 }
 
 const CreatePage = () => {
+    const utils = api.useUtils()
+    const refetch = UseRefetch()
     const { register, handleSubmit, reset } = useForm<FormInput>()
-    
+    const createProject = api.project.createProject.useMutation({
+        onSuccess: async () => {
+            toast.success("Project created successfully!", {
+                description: "You can now start chatting with your codebase."
+            })
+            // Invalidate and refetch projects
+            refetch()
+            reset()
+        },
+        onError: (error) => {
+            toast.error("Failed to create project", {
+                description: error.message
+            })
+        }
+    })
     const onSubmit = (data: FormInput) => {
-        console.log(data) // Handle form submission here
+        createProject.mutate(data)
     }
 
     return (
@@ -100,7 +119,7 @@ const CreatePage = () => {
                   <Input
                     {...register("githubToken")}
                     placeholder="GitHub Token (optional, for private repositories)"
-                    type="password"
+                    type="number"
                   />
                 </motion.div>
 
@@ -109,8 +128,8 @@ const CreatePage = () => {
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ delay: 0.9 }}
                 >
-                  <Button type="submit" className="w-full" size="lg">
-                    Check Credits →
+                  <Button type="submit" className="w-full" size="lg" disabled={createProject.isPending}>
+                    {createProject.isPending ? "Checking Credits..." : "Check Credits →"}
                   </Button>
                 </motion.div>
               </form>

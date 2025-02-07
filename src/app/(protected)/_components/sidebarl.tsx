@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation'
 import React from 'react'
 import { Button } from "@/components/ui/button"
 import { motion } from "framer-motion"
+import useProject from '@/hooks/use-project'
 
 const items = [
     {
@@ -31,20 +32,11 @@ const items = [
     },
 ]
 
-const projects = [
-    {
-        title : 'Project 1'
-    },
-    {
-        title : 'Project 2'
-    },
-    {
-        title : 'Project 3'
-    }
-]
-
 const SidebarLeft = () => {
     const pathname = usePathname()
+
+const { data: projects, projectId, setProjectId } = useProject()
+
     return (
         <Sidebar collapsible='icon' variant='floating'>
             <motion.div
@@ -85,14 +77,17 @@ const SidebarLeft = () => {
                         </SidebarGroupLabel>
                         <SidebarGroupContent className="px-2">
                             <SidebarMenu>
-                                {projects.map((project) => (
-                                    <SidebarMenuItem key={project.title} className="mb-1">
+                                {projects?.map((project) => (
+                                    <SidebarMenuItem key={project.id} className="mb-1">
                                         <SidebarMenuButton asChild>
-                                            <Link href={`/projects/${project.title.toLowerCase().replace(' ', '-')}`} 
-                                                className={cn('flex items-center gap-3 rounded-md px-4 py-2 text-sm transition-colors hover:text-primary', {
-                                                    'bg-primary text-white': pathname.includes(project.title.toLowerCase().replace(' ', '-'))
-                                                })}>
-                                                <span>{project.title}</span>
+                                            <Link 
+                                                href={`/projects/${project.projectName.toLowerCase().replace(' ', '-')}`} 
+                                                className={cn('flex items-center gap-3 rounded-md px-4 py-2 text-sm transition-colors hover:bg-primary/10', {
+                                                    'bg-primary text-white': pathname.includes(project.projectName.toLowerCase().replace(' ', '-')) || projectId === project.id
+                                                })}
+                                                onClick={() => setProjectId(project.id)}
+                                            >
+                                                <span>{project.projectName}</span>
                                             </Link>
                                         </SidebarMenuButton>
                                     </SidebarMenuItem>

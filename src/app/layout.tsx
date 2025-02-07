@@ -2,6 +2,7 @@ import "@/styles/globals.css";
 import {ClerkProvider} from "@clerk/nextjs";
 import { GeistSans } from "geist/font/sans";
 import { type Metadata } from "next";
+import { Toaster } from "sonner"
 
 import { TRPCReactProvider } from "@/trpc/react";
 
@@ -18,7 +19,12 @@ export default function RootLayout({
     <ClerkProvider>
     <html lang="en" className={`${GeistSans.variable}`}>
       <body>
-        <TRPCReactProvider>{children}</TRPCReactProvider>
+        <TRPCReactProvider>
+          <ClerkProvider>
+            {children}
+            <Toaster />
+          </ClerkProvider>
+        </TRPCReactProvider>
       </body>
     </html>
     </ClerkProvider>
