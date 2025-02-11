@@ -80,15 +80,16 @@ const { data: projects, projectId, setProjectId } = useProject()
                                 {projects?.map((project) => (
                                     <SidebarMenuItem key={project.id} className="mb-1">
                                         <SidebarMenuButton asChild>
-                                            <Link 
-                                                href={`/projects/${project.projectName.toLowerCase().replace(' ', '-')}`} 
-                                                className={cn('flex items-center gap-3 rounded-md px-4 py-2 text-sm transition-colors hover:bg-primary/10', {
-                                                    'bg-primary text-white': pathname.includes(project.projectName.toLowerCase().replace(' ', '-')) || projectId === project.id
-                                                })}
+                                            <Button 
+                                                variant={projectId === project.id ? "default" : "ghost"}
+                                                className={cn(
+                                                    'flex items-center gap-3 rounded-md px-4 py-2 text-sm transition-colors',
+                                                    projectId === project.id ? 'bg-primary text-primary-foreground' : 'hover:bg-primary/10'
+                                                )}
                                                 onClick={() => setProjectId(project.id)}
                                             >
                                                 <span>{project.projectName}</span>
-                                            </Link>
+                                            </Button>
                                         </SidebarMenuButton>
                                     </SidebarMenuItem>
                                 ))}
