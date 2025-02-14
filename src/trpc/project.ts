@@ -1,3 +1,4 @@
+import { pullCommits } from "@/lib/ocktokit";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "@/server/api/trpc";
 import { z } from "zod";
 export const projectRouter = createTRPCRouter({
@@ -15,6 +16,7 @@ export const projectRouter = createTRPCRouter({
         userId : ctx.user.userId!
        }
     })
+    await pullCommits(project.id)
     return project
    }),
    getProjects : protectedProcedure.query(async ({ctx}) => {

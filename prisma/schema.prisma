@@ -19,7 +19,7 @@ model User {
     lastName      String?
     emailAddress  String    @unique
     credits       Int       @default(150)
-    gitProjects GitProject[]
+    gitProjects GitProject[] 
 }
 
 model GitProject {
@@ -36,4 +36,23 @@ model GitProject {
 
     userId String
     user User @relation(fields: [userId], references: [id])
+
+    gitCommits GitCommit[]
+}
+
+model GitCommit{
+    id String @id @default(uuid())
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+
+    gitProjectId String
+    gitProject GitProject @relation(fields: [gitProjectId], references: [id])
+
+    commitHash String
+    commitMessage String
+    commitAuthorName String
+    commitAuthorAvatarUrl String
+    commitDate DateTime
+    summary String
 }
