@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv'
 dotenv.config()
 
 import {GoogleGenerativeAI} from "@google/generative-ai"
+import { Document } from '@langchain/core/documents'
 console.log(process.env.GEMINI_API_KEY)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
@@ -82,3 +83,34 @@ export const Summarize = async (diff: string) => {
     return response.response.text();
 };
 
+
+export const SummarizeCode = async (doc: Document) => {
+    const truncatedContent = doc.pageContent.slice(0, 10000);
+    
+    const prompt = [
+        "You are an expert code analyzer. Provide a clear, concise summary of the following code in no more than 200 words.",
+        "",
+        "FORMAT YOUR RESPONSE AS FOLLOWS:",
+        " OVERVIEW (50 words max)",
+        "Core purpose and functionality",
+        "",
+        " KEY POINTS (150 words max)",
+        "• Main functions/components",
+        "• Important patterns or dependencies",
+        "• Notable technical considerations",
+        "",
+        "Be direct and focus only on the most important aspects.",
+        "",
+        "CODE TO ANALYZE:",
+        truncatedContent
+    ].join("\n");
+
+    const response = await gemini.generateContent(prompt);
+    console.log(response.response.text())
+    return response.response.text();
+}
+
+export const generateEmbedding = async (text: string) => {
+    const response = await gemini.embedContent(text);
+    return response.embedding;
+}
