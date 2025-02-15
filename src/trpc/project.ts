@@ -22,5 +22,23 @@ export const projectRouter = createTRPCRouter({
    getProjects : protectedProcedure.query(async ({ctx}) => {
     const projects = await ctx.db.gitProject.findMany({where : {userId : ctx.user.userId! , deletedAt : null}})
     return projects
-   })
+   }),
+   getCommits: protectedProcedure
+    .input(z.object({
+        projectId: z.string()
+    }))
+    .query(async ({ctx, input}) => {
+      await pullCommits(input.projectId).catch(err => {
+        console.error(err)
+      })
+        const commits = await ctx.db.gitCommit.findMany({
+            where: {
+                gitProjectId: input.projectId
+            },
+            orderBy: {
+                commitDate: 'desc'
+            }
+        })
+        return commits
+    }),
 })
