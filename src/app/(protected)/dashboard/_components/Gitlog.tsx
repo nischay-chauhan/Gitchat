@@ -2,7 +2,7 @@
 import useProject from '@/hooks/use-project'
 import { useUser } from '@clerk/nextjs'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { BarChart, Activity, Users, GitBranch, GitCommit, GitPullRequest, GitMerge, Clock, MessageCircle, Search } from 'lucide-react'
+import { BarChart, Activity, Users, GitBranch, GitCommit, GitPullRequest, GitMerge, Clock, MessageCircle, Search, ExternalLink } from 'lucide-react'
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { api } from "@/trpc/react"
@@ -10,6 +10,8 @@ import { format } from "date-fns"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Input } from "@/components/ui/input"
 import { useState, useMemo } from "react"
+import Link from 'next/link'
+import { Button } from "@/components/ui/button"
 
 const Gitlog = () => {
     const {user} = useUser()
@@ -39,9 +41,22 @@ const Gitlog = () => {
                 <h1 className="text-3xl font-bold">
                     {project ? project.projectName : "Select a Project"}
                 </h1>
-                <p className="text-muted-foreground">
-                    {project ? `Repository: ${project.repoUrl}` : "Choose a project from the sidebar to get started"}
-                </p>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                    <p>
+                        {project ? "Repository: " : "Choose a project from the sidebar to get started"}
+                    </p>
+                    {project && (
+                        <Link 
+                            href={project.repoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 hover:text-primary transition-colors"
+                        >
+                            {project.repoUrl}
+                            <ExternalLink className="h-3 w-3" />
+                        </Link>
+                    )}
+                </div>
             </div>
 
             {project && (
@@ -123,9 +138,17 @@ const Gitlog = () => {
                                                                 <span>•</span>
                                                                 <span>{format(new Date(commit.commitDate), 'MMM d, yyyy')}</span>
                                                                 <span>•</span>
-                                                                <code className="px-1.5 py-0.5 bg-muted rounded text-sm">
-                                                                    {commit.commitHash.slice(0, 7)}
-                                                                </code>
+                                                                <Link
+                                                                    href={`${project.repoUrl}/commit/${commit.commitHash}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="hover:text-primary transition-colors"
+                                                                >
+                                                                    <code className="px-1.5 py-0.5 bg-muted rounded text-sm inline-flex items-center gap-1">
+                                                                        {commit.commitHash.slice(0, 7)}
+                                                                        <ExternalLink className="h-3 w-3" />
+                                                                    </code>
+                                                                </Link>
                                                             </div>
                                                         </div>
                                                     </div>
