@@ -1,6 +1,8 @@
+import { IndexGithubRepo } from "@/lib/github";
 import { pullCommits } from "@/lib/ocktokit";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "@/server/api/trpc";
 import { z } from "zod";
+
 export const projectRouter = createTRPCRouter({
    createProject : protectedProcedure.input(z.object({
     projectName : z.string(),
@@ -8,6 +10,31 @@ export const projectRouter = createTRPCRouter({
     githubToken : z.string().optional()
    })).mutation(async ({ctx , input}) => {
     const {projectName , repoUrl , githubToken} = input
+
+    const existingProjectName = await ctx.db.gitProject.findFirst({
+      where: {
+        projectName,
+        userId: ctx.user.userId!,
+        deletedAt: null
+      }
+    });
+
+    if (existingProjectName) {
+      throw new Error("A project with this name already exists");
+    }
+
+    const existingProjectUrl = await ctx.db.gitProject.findFirst({
+      where: {
+        repoUrl,
+        userId: ctx.user.userId!,
+        deletedAt: null
+      }
+    });
+
+    if (existingProjectUrl) {
+      throw new Error("This repository is already linked to another project");
+    }
+
     const project = await ctx.db.gitProject.create({
        data : {
         projectName : projectName ,
@@ -16,9 +43,11 @@ export const projectRouter = createTRPCRouter({
         userId : ctx.user.userId!
        }
     })
+    await IndexGithubRepo(project.id , repoUrl , githubToken)
     await pullCommits(project.id)
     return project
    }),
+   
    getProjects : protectedProcedure.query(async ({ctx}) => {
     const projects = await ctx.db.gitProject.findMany({where : {userId : ctx.user.userId! , deletedAt : null}})
     return projects

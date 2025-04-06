@@ -1,10 +1,11 @@
 import {GithubRepoLoader} from "@langchain/community/document_loaders/web/github"
 import {Document} from "@langchain/core/documents"
-import { Summarize, SummarizeCode } from "./gemini"
+import { generateEmbedding, Summarize, SummarizeCode } from "./gemini"
+import { db } from "@/server/db"
 
 export const LoadGithubRepo = async(repoUrl: string , githubToken?: string) => {
     const loader = new GithubRepoLoader(repoUrl, {
-        accessToken: githubToken || '',
+        accessToken: process.env.GITHUB_TOKEN || '',
         branch: 'main',
         ignoreFiles: [
             'node_modules',
@@ -36,14 +37,39 @@ export const LoadGithubRepo = async(repoUrl: string , githubToken?: string) => {
 }
 
 
-export const IndexGithubRepo = async(repoUrl: string , githubToken?: string) => {
+export const IndexGithubRepo = async(gitProjectId: string, repoUrl: string , githubToken?: string) => {
     const docs = await LoadGithubRepo(repoUrl, githubToken)
     const embeddings = await generateEmbeddings(docs)
+    await Promise.allSettled(embeddings.map(async (embedding) => {
+        
+        console.log(`currently processing ${embedding.fileName}`)
+        if(!embedding) return
+
+        const sourceCodeEmbedding = await db.sourceCodeEmbedding.create({
+            data : {
+                sourceCode : embedding.sourceCode,
+                fileName : embedding.fileName,
+                summary : embedding.summary,
+                gitProjectId : gitProjectId,
+            }
+        })
+        await db.$executeRaw`
+        UPDATE "SourceCodeEmbedding"
+        SET "summaryEmbedding" = ${embedding.embedding}::vector
+        WHERE "id" = ${sourceCodeEmbedding.id}
+        `
+    }))
 }
 
 const generateEmbeddings = async(docs: Document[]) => {
     return await Promise.all(docs.map(async (doc) => {
        const summary = await SummarizeCode(doc)
-
+       const embedding = await generateEmbedding(summary)
+       return {
+        summary,
+        embedding,
+        sourceCode : JSON.parse(JSON.stringify(doc.pageContent)),
+        fileName : doc.metadata.source
+       }
     }))
 }

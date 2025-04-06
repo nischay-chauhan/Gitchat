@@ -2,6 +2,7 @@ import { db } from "@/server/db";
 import { Octokit } from "octokit";
 import { Summarize } from "./gemini";
 import axios from "axios";
+
 export const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
 });
@@ -15,6 +16,9 @@ interface Response{
     commitAuthorAvatarUrl: string;
     commitDate: string;
 }
+
+// Utility function to create a delay
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const getCommitsHashes = async (githubUrl: string): Promise<Response[]> => {
     const [owner , repo] = githubUrl.split("/").slice(-2)
@@ -46,14 +50,20 @@ export const pullCommits = async (projectId: string) => {
 
     const commitHashes = await getCommitsHashes(githubUrl)
     const unprocessedCommits = await filterUnprocessedCommits(projectId , commitHashes)
-    const listOfSummaries = await Promise.allSettled(unprocessedCommits.map((commit) => summarizeCommit(githubUrl , commit.commitHash)))
-    
-    const summaries = listOfSummaries.map((response) => {
-        if(response.status === "fulfilled") {
-            return response.value as string
+
+    const summaries: string[] = [];
+
+    for (const commit of unprocessedCommits) {
+        try {
+            // Delay before summarizing each commit
+            await delay(2000); // Adjust the delay as needed (e.g., 2000 ms = 2 seconds)
+            const summary = await summarizeCommit(githubUrl , commit.commitHash)
+            summaries.push(summary || "No summary available")
+        } catch (error) {
+            console.error(`Failed to summarize commit ${commit.commitHash}:`, error);
+            summaries.push("No summary available"); // Fallback for failed summaries
         }
-        return "No summary available"
-    })
+    }
 
     const commit = await db.gitCommit.createMany({
         data : summaries.map((summary , index) => {
