@@ -41,6 +41,7 @@ model GitProject {
 
     gitCommits GitCommit[]
     sourceCodeEmbedding SourceCodeEmbedding[]
+    summarizationJobs SummarizationJob[]
 }
 
 model GitCommit{
@@ -69,4 +70,30 @@ model SourceCodeEmbedding {
 
     gitProjectId       String
     gitProject         GitProject  @relation(fields: [gitProjectId], references: [id])
+}
+
+enum JobType {
+  COMMIT_DIFF
+  SOURCE_CODE
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model SummarizationJob {
+  id           String    @id @default(uuid())
+  jobType      JobType
+  targetId     String
+  payload      Json
+  status       JobStatus @default(PENDING)
+  retryCount   Int       @default(0)
+  errorMessage String?
+  gitProjectId String
+  gitProject   GitProject @relation(fields: [gitProjectId], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }

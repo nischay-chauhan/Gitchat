@@ -1,7 +1,9 @@
 import { db } from "@/server/db";
 import { Octokit } from "octokit";
-import { Summarize } from "./gemini";
+import { Summarize } from "./gemini"; // Assuming Summarize might be used elsewhere or can be removed if not
 import axios from "axios";
+import { addSummarizationJob } from "./queue";
+import { JobType } from "@prisma/client";
 
 export const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
@@ -51,39 +53,54 @@ export const pullCommits = async (projectId: string) => {
     const commitHashes = await getCommitsHashes(githubUrl)
     const unprocessedCommits = await filterUnprocessedCommits(projectId , commitHashes)
 
-    const summaries: string[] = [];
+    // No longer collecting summaries directly here
+    // const summaries: string[] = [];
 
     for (const commit of unprocessedCommits) {
         try {
-            // Delay before summarizing each commit
-            await delay(2000); // Adjust the delay as needed (e.g., 2000 ms = 2 seconds)
-            const summary = await summarizeCommit(githubUrl , commit.commitHash)
-            summaries.push(summary || "No summary available")
+            // No longer delaying here, summarization is async
+            // await delay(2000);
+            const diffContent = await summarizeCommit(githubUrl , commit.commitHash);
+
+            if (diffContent) {
+                await addSummarizationJob({
+                    jobType: JobType.COMMIT_DIFF,
+                    targetId: commit.commitHash,
+                    payload: diffContent,
+                    gitProjectId: projectId,
+                });
+                console.log(`Enqueued summarization job for commit: ${commit.commitHash}`);
+            } else {
+                console.warn(`No diff content fetched for commit ${commit.commitHash}, skipping job enqueue.`);
+            }
         } catch (error) {
-            console.error(`Failed to summarize commit ${commit.commitHash}:`, error);
-            summaries.push("No summary available"); // Fallback for failed summaries
+            console.error(`Failed to process or enqueue commit ${commit.commitHash}:`, error);
+            // Decide if you want to create a GitCommit entry even if job enqueuing fails
         }
     }
 
-    const commit = await db.gitCommit.createMany({
-        data : summaries.map((summary , index) => {
-            console.log(`processing commit ${index + 1} of ${unprocessedCommits.length}`)
-            return(
-                {
-                    gitProjectId: projectId,
-                    commitHash: unprocessedCommits[index]!.commitHash,
-                    commitMessage: unprocessedCommits[index]!.commitMessage,
-                    commitAuthorName: unprocessedCommits[index]!.commitAuthorName,
-                    commitAuthorAvatarUrl: unprocessedCommits[index]!.commitAuthorAvatarUrl,
-                    commitDate: unprocessedCommits[index]!.commitDate,
-                    summary: summary,
-                }
-            )
-        })
-    })
+    // Create GitCommit entries with a placeholder summary
+    const commitCreationData = unprocessedCommits.map((commit) => ({
+        gitProjectId: projectId,
+        commitHash: commit.commitHash,
+        commitMessage: commit.commitMessage,
+        commitAuthorName: commit.commitAuthorName,
+        commitAuthorAvatarUrl: commit.commitAuthorAvatarUrl,
+        commitDate: commit.commitDate,
+        summary: "Summary pending...", // Placeholder summary
+    }));
 
-    return commit
-
+    if (commitCreationData.length > 0) {
+        const createdCommits = await db.gitCommit.createMany({
+            data: commitCreationData,
+            skipDuplicates: true, // Good to have if there's any chance of reprocessing
+        });
+        console.log(`Created ${createdCommits.count} GitCommit entries.`);
+        return createdCommits;
+    } else {
+        console.log("No new commits to create entries for.");
+        return { count: 0 }; // Or handle as appropriate
+    }
 }
 
 async function getProjectUrl(projectId: string) {
@@ -116,11 +133,17 @@ async function filterUnprocessedCommits(projectId: string , commitHashes: Respon
     return commitHashes.filter((commit) => !processedCommitHashes.some((processedCommit) => processedCommit.commitHash === commit.commitHash));
 }
 
-async function summarizeCommit(githubUrl: string , commitHash: string) {
-    const {data} = await axios.get(`${githubUrl}/commit/${commitHash}.diff` , {
-        headers: {
-            Accept : 'application/vnd.github.v3.diff'
-        }
-    })
-    return await Summarize(data) ||  ""
+// Now returns the diff content string, or null if an error occurs
+async function summarizeCommit(githubUrl: string , commitHash: string): Promise<string | null> {
+    try {
+        const {data} = await axios.get(`${githubUrl}/commit/${commitHash}.diff` , {
+            headers: {
+                Accept : 'application/vnd.github.v3.diff'
+            }
+        });
+        return data;
+    } catch (error) {
+        console.error(`Failed to fetch diff for commit ${commitHash}:`, error);
+        return null; // Return null or throw, depending on desired error handling for the caller
+    }
 }

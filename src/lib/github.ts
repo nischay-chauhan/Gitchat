@@ -1,7 +1,9 @@
 import {GithubRepoLoader} from "@langchain/community/document_loaders/web/github"
 import {Document} from "@langchain/core/documents"
-import { generateEmbedding, Summarize, SummarizeCode } from "./gemini"
+import { generateEmbedding, Summarize, SummarizeCode } from "./gemini" // Assuming SummarizeCode might be used elsewhere or can be removed if not
 import { db } from "@/server/db"
+import { addSummarizationJob } from "./queue";
+import { JobType } from "@prisma/client";
 
 export const LoadGithubRepo = async(repoUrl: string , githubToken?: string) => {
     const loader = new GithubRepoLoader(repoUrl, {
@@ -39,37 +41,49 @@ export const LoadGithubRepo = async(repoUrl: string , githubToken?: string) => {
 
 export const IndexGithubRepo = async(gitProjectId: string, repoUrl: string , githubToken?: string) => {
     const docs = await LoadGithubRepo(repoUrl, githubToken)
-    const embeddings = await generateEmbeddings(docs)
-    await Promise.allSettled(embeddings.map(async (embedding) => {
-        
-        console.log(`currently processing ${embedding.fileName}`)
-        if(!embedding) return
+    // generateEmbeddings now primarily enqueues jobs and returns targetIds (file paths)
+    const enqueuedFilePaths = await generateEmbeddings(docs, gitProjectId)
 
-        const sourceCodeEmbedding = await db.sourceCodeEmbedding.create({
-            data : {
-                sourceCode : embedding.sourceCode,
-                fileName : embedding.fileName,
-                summary : embedding.summary,
-                gitProjectId : gitProjectId,
+    // Create initial SourceCodeEmbedding entries
+    await Promise.allSettled(docs.map(async (doc) => {
+        const filePath = doc.metadata.source;
+        // Ensure this doc was actually enqueued if there was any filtering in generateEmbeddings
+        if (enqueuedFilePaths.includes(filePath)) {
+            console.log(`Creating initial embedding entry for ${filePath}`)
+            try {
+                await db.sourceCodeEmbedding.create({
+                    data: {
+                        sourceCode: doc.pageContent,
+                        fileName: filePath,
+                        summary: "Summary pending...", // Placeholder summary
+                        gitProjectId: gitProjectId,
+                        // summaryEmbedding will be updated by the worker
+                    }
+                });
+            } catch (error) {
+                console.error(`Failed to create initial SourceCodeEmbedding for ${filePath}:`, error);
             }
-        })
-        await db.$executeRaw`
-        UPDATE "SourceCodeEmbedding"
-        SET "summaryEmbedding" = ${embedding.embedding}::vector
-        WHERE "id" = ${sourceCodeEmbedding.id}
-        `
+        }
     }))
+    console.log(`Enqueued ${enqueuedFilePaths.length} documents for summarization.`);
 }
 
-const generateEmbeddings = async(docs: Document[]) => {
-    return await Promise.all(docs.map(async (doc) => {
-       const summary = await SummarizeCode(doc)
-       const embedding = await generateEmbedding(summary)
-       return {
-        summary,
-        embedding,
-        sourceCode : JSON.parse(JSON.stringify(doc.pageContent)),
-        fileName : doc.metadata.source
+// Modified to accept gitProjectId and enqueue jobs
+const generateEmbeddings = async(docs: Document[], gitProjectId: string): Promise<string[]> => {
+    const enqueuedTargetIds: string[] = [];
+    await Promise.all(docs.map(async (doc) => {
+       try {
+        await addSummarizationJob({
+            jobType: JobType.SOURCE_CODE,
+            targetId: doc.metadata.source, // Using file path as targetId
+            payload: doc.pageContent,      // Full content as payload
+            gitProjectId: gitProjectId,
+        });
+        enqueuedTargetIds.push(doc.metadata.source);
+        console.log(`Enqueued summarization job for: ${doc.metadata.source}`);
+       } catch (error) {
+        console.error(`Failed to enqueue summarization job for: ${doc.metadata.source}`, error);
        }
-    }))
+    }));
+    return enqueuedTargetIds;
 }
